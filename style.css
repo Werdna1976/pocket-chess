@@ -83,7 +83,7 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .actions button, dialog button { background: var(--paper); border: 1px solid var(--line); padding: 10px; border-radius: 8px; font-weight: 650; }
 .actions button:hover:enabled, dialog button:hover { background: #e1e7e9; }
-.actions #new-game { grid-column: 1 / -1; }
+.actions #options-button { grid-column: 1 / -1; }
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: inherit; padding: 20px; }
 dialog::backdrop { background: #17233388; }
 #promotion-options { display: flex; gap: 6px; margin-bottom: 12px; }
@@ -94,3 +94,25 @@ dialog::backdrop { background: #17233388; }
   .sidebar { margin-top: 0; }
   #moves { min-height: 42px; max-height: 160px; }
 }
+
+.player strong, .status { overflow-wrap: anywhere; min-width: 0; }
+.turn-dot { flex: 0 0 8px; }
+#options { width: min(420px, calc(100% - 32px)); }
+#game-settings { display: grid; gap: 14px; }
+#game-settings label { font-size: .9rem; font-weight: 650; }
+#game-settings input, #game-settings select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 9px 10px;
+  font: inherit;
+  font-weight: 400;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid #a9afb1;
+  border-radius: 7px;
+}
+.options-note { margin: 0; color: var(--muted); font-size: .85rem; }
+.options-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.options-actions button[type="submit"] { background: var(--ink); color: var(--paper); }
+.options-actions button[type="submit"]:hover { background: #354f65; }

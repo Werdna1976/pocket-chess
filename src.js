@@ -10,15 +10,30 @@ const status = document.querySelector('#status')
 const historyPanel = document.querySelector('#moves')
 const promotion = document.querySelector('#promotion')
 const promotionOptions = document.querySelector('#promotion-options')
+const optionsDialog = document.querySelector('#options')
+const settingsForm = document.querySelector('#game-settings')
+const fields = settingsForm.elements
+const defaults = { opponent: 'person', white: '', black: '', difficulty: 'medium' }
 const storageKey = 'pocket-chess-v1'
 let selected = null
 let flipped = false
+let settings = { ...defaults }
+let engine = null
 
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey))
   if (saved) {
     game.loadPgn(saved.pgn)
     flipped = saved.flipped === true
+    const options = saved.settings
+    if (options) {
+      settings = {
+        opponent: options.opponent === 'computer' ? 'computer' : 'person',
+        white: typeof options.white === 'string' ? options.white.trim().slice(0, 40) : '',
+        black: typeof options.black === 'string' ? options.black.trim().slice(0, 40) : '',
+        difficulty: ['easy', 'medium', 'hard'].includes(options.difficulty) ? options.difficulty : defaults.difficulty,
+      }
+    }
   }
 } catch {
   game.reset()
@@ -26,7 +41,7 @@ try {
 
 function save() {
   try {
-    localStorage.setItem(storageKey, JSON.stringify({ pgn: game.pgn(), flipped }))
+    localStorage.setItem(storageKey, JSON.stringify({ pgn: game.pgn(), flipped, settings }))
   } catch {
     // The game remains playable when storage is unavailable.
   }
@@ -36,14 +51,24 @@ function pieceMarkup(type, color) {
   return `<span class="piece ${color}" aria-hidden="true">${symbols[type]}</span>`
 }
 
+function playerName(color) {
+  return color === 'w' ? settings.white || colors.w
+    : settings.black || (settings.opponent === 'computer' ? 'Computer' : colors.b)
+}
+
+function computerTurn() {
+  return settings.opponent === 'computer' && game.turn() === 'b' && !game.isGameOver()
+}
+
 function gameStatus() {
   const turn = game.turn()
-  if (game.isCheckmate()) return `${colors[turn === 'w' ? 'b' : 'w']} wins · Checkmate`
+  if (game.isCheckmate()) return `${playerName(turn === 'w' ? 'b' : 'w')} wins · Checkmate`
   if (game.isStalemate()) return 'Draw · Stalemate'
   if (game.isInsufficientMaterial()) return 'Draw · Insufficient material'
   if (game.isThreefoldRepetition()) return 'Draw · Threefold repetition'
   if (game.isDrawByFiftyMoves()) return 'Draw · Fifty-move rule'
-  return `${colors[turn]} to move${game.isCheck() ? ' · Check' : ''}`
+  if (computerTurn()) return `${playerName(turn)} is thinking…`
+  return `${playerName(turn)} to move${game.isCheck() ? ' · Check' : ''}`
 }
 
 function render(focusSquare) {
@@ -77,13 +102,15 @@ function render(focusSquare) {
   }))
 
   status.textContent = gameStatus()
+  document.querySelector('#mode').textContent = settings.opponent === 'computer'
+    ? `Computer · ${settings.difficulty}` : 'Local multiplayer'
   for (const [position, color] of [['top', flipped ? 'w' : 'b'], ['bottom', flipped ? 'b' : 'w']]) {
     const active = !game.isGameOver() && color === game.turn()
     const player = document.querySelector(`#${position}-player`)
-    player.innerHTML = `<div class="player-icon">${pieceMarkup('k', color)}</div><strong>${colors[color]}</strong>${active ? '<span class="turn-dot" aria-label="Current turn"></span>' : ''}`
+    player.innerHTML = `<div class="player-icon">${pieceMarkup('k', color)}</div><strong></strong>${active ? '<span class="turn-dot" aria-label="Current turn"></span>' : ''}`
+    player.querySelector('strong').textContent = playerName(color)
   }
   document.querySelector('#undo').disabled = history.length === 0
-  document.querySelector('#new-game').disabled = history.length === 0 && !selected
 
   if (history.length) {
     const rows = []
@@ -98,16 +125,39 @@ function render(focusSquare) {
   if (focusSquare) board.querySelector(`[data-square="${focusSquare}"]`)?.focus({ preventScroll: true })
 }
 
-function play(move) {
+function stopEngine() {
+  engine?.terminate()
+  engine = null
+}
+
+function startComputerTurn() {
+  if (!computerTurn() || engine || optionsDialog.open) return
+  const worker = new Worker(new URL('./engine.js', import.meta.url), { type: 'module' })
+  engine = worker
+  worker.onmessage = ({ data: move }) => {
+    if (engine !== worker) return
+    stopEngine()
+    if (move && computerTurn()) play(move, false)
+  }
+  worker.onerror = () => {
+    if (engine !== worker) return
+    stopEngine()
+    status.textContent = 'Computer unavailable. Undo or start a new game.'
+  }
+  worker.postMessage({ pgn: game.pgn(), difficulty: settings.difficulty })
+}
+
+function play(move, focus = true) {
   game.move(move)
   selected = null
   save()
-  render(move.to)
+  render(focus ? move.to : board.contains(document.activeElement) ? document.activeElement.dataset.square : undefined)
+  startComputerTurn()
 }
 
 board.addEventListener('click', event => {
   const square = event.target.closest('[data-square]')?.dataset.square
-  if (!square || game.isGameOver()) return
+  if (!square || game.isGameOver() || computerTurn()) return
   const options = selected ? game.moves({ square: selected, verbose: true }).filter(move => move.to === square) : []
   if (options[0]?.promotion) {
     promotionOptions.replaceChildren()
@@ -148,7 +198,9 @@ board.addEventListener('keydown', event => {
 })
 
 document.querySelector('#undo').addEventListener('click', () => {
+  stopEngine()
   game.undo()
+  if (settings.opponent === 'computer' && game.turn() === 'b') game.undo()
   selected = null
   save()
   render()
@@ -160,12 +212,37 @@ document.querySelector('#flip').addEventListener('click', () => {
   render()
 })
 
-document.querySelector('#new-game').addEventListener('click', () => {
-  if (game.history().length && !game.isGameOver() && !window.confirm('Start a new game and clear the current moves?')) return
+function updateOptionsFields() {
+  const computer = fields.opponent.value === 'computer'
+  document.querySelector('#difficulty-field').hidden = !computer
+  document.querySelector('#black-label').textContent = computer ? 'Computer name' : 'Black player name'
+  fields.black.placeholder = computer ? 'Computer' : 'Black'
+}
+
+document.querySelector('#options-button').addEventListener('click', () => {
+  for (const [name, value] of Object.entries(settings)) fields[name].value = value
+  updateOptionsFields()
+  stopEngine()
+  optionsDialog.showModal()
+})
+
+fields.opponent.addEventListener('change', updateOptionsFields)
+document.querySelector('#cancel-options').addEventListener('click', () => optionsDialog.close())
+optionsDialog.addEventListener('close', startComputerTurn)
+settingsForm.addEventListener('submit', event => {
+  event.preventDefault()
+  settings = {
+    opponent: fields.opponent.value,
+    white: fields.white.value.trim(),
+    black: fields.black.value.trim(),
+    difficulty: fields.difficulty.value,
+  }
   game.reset()
   selected = null
   save()
   render()
+  optionsDialog.close()
 })
 
 render()
+startComputerTurn()
