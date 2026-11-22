@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f6f4ee">
   <title>Pocket Chess</title>
-  <script type="module" crossorigin src="./assets/index-Ccz-NCir.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DyuQn0x6.css">
+  <script type="module" crossorigin src="./assets/index-Datg6N9U.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Diu4J_mn.css">
 </head>
 <body>
-  <header class="site-header"><div class="brand"><span aria-hidden="true">♞</span> Pocket Chess</div><span class="mode">Local multiplayer</span></header>
+  <header class="site-header"><div class="brand"><span aria-hidden="true">♞</span> Pocket Chess</div><span class="mode" id="mode"></span></header>
   <main>
     <section class="play" aria-label="Chessboard">
       <div class="player" id="top-player"></div>
@@ -25,10 +25,35 @@
       <div class="actions">
         <button type="button" id="undo">Undo move</button>
         <button type="button" id="flip">Flip board</button>
-        <button type="button" id="new-game">New game</button>
+        <button type="button" id="options-button">Game options</button>
       </div>
     </aside>
   </main>
+  <dialog id="options" aria-labelledby="options-title">
+    <h2 id="options-title">Game options</h2>
+    <form id="game-settings">
+      <label>Opponent
+        <select name="opponent">
+          <option value="person">Person</option>
+          <option value="computer">Computer</option>
+        </select>
+      </label>
+      <label>White player name <input name="white" maxlength="40" placeholder="White"></label>
+      <label><span id="black-label">Black player name</span> <input name="black" maxlength="40" placeholder="Black"></label>
+      <label id="difficulty-field" hidden>Difficulty
+        <select name="difficulty">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label>
+      <p class="options-note">Starting a new game clears the current board and move history.</p>
+      <div class="options-actions">
+        <button type="button" id="cancel-options">Cancel</button>
+        <button type="submit">Start new game</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="promotion" aria-labelledby="promotion-title">
     <h2 id="promotion-title">Promote pawn</h2>
     <div id="promotion-options"></div>
