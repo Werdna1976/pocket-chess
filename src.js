@@ -2,7 +2,7 @@ import { Chess } from 'chess.js'
 import './style.css'
 
 const game = new Chess()
-const symbols = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' }
+const pieceSets = { classic: 'Classic', porcelain: 'Porcelain', walnut: 'Walnut' }
 const pieceNames = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }
 const colors = { w: 'White', b: 'Black' }
 const board = document.querySelector('#board')
@@ -15,6 +15,7 @@ const settingsForm = document.querySelector('#game-settings')
 const fields = settingsForm.elements
 const defaults = { opponent: 'person', white: '', black: '', difficulty: 'medium' }
 const storageKey = 'pocket-chess-v1'
+let pieceSet = 'classic'
 let selected = null
 let flipped = false
 let settings = { ...defaults }
@@ -25,6 +26,7 @@ try {
   if (saved) {
     game.loadPgn(saved.pgn)
     flipped = saved.flipped === true
+    if (Object.hasOwn(pieceSets, saved.pieceSet)) pieceSet = saved.pieceSet
     const options = saved.settings
     if (options) {
       settings = {
@@ -41,14 +43,32 @@ try {
 
 function save() {
   try {
-    localStorage.setItem(storageKey, JSON.stringify({ pgn: game.pgn(), flipped, settings }))
+    localStorage.setItem(storageKey, JSON.stringify({ pgn: game.pgn(), flipped, settings, pieceSet }))
   } catch {
     // The game remains playable when storage is unavailable.
   }
 }
 
-function pieceMarkup(type, color) {
-  return `<span class="piece ${color}" aria-hidden="true">${symbols[type]}</span>`
+function pieceMarkup(type, color, set = pieceSet) {
+  return `<img class="piece" src="${import.meta.env.BASE_URL}pieces/${set}/${color}${type}.png" alt="" draggable="false">`
+}
+
+const piecePicker = document.querySelector('#piece-sets')
+for (const [id, name] of Object.entries(pieceSets)) {
+  const choice = document.createElement('label')
+  choice.innerHTML = `<input type="radio" name="piece-set" value="${id}">
+    <span class="piece-card">
+      <span class="piece-preview">${pieceMarkup('n', 'w', id)}${pieceMarkup('q', 'b', id)}</span>
+      <span>${name}</span>
+    </span>`
+  const radio = choice.querySelector('input')
+  radio.checked = id === pieceSet
+  radio.addEventListener('change', () => {
+    pieceSet = id
+    save()
+    render()
+  })
+  piecePicker.append(choice)
 }
 
 function playerName(color) {
@@ -101,6 +121,7 @@ function render(focusSquare) {
     board.append(button)
   }))
 
+  document.querySelector('#brand-piece').innerHTML = pieceMarkup('n', 'w')
   status.textContent = gameStatus()
   document.querySelector('#mode').textContent = settings.opponent === 'computer'
     ? `Computer · ${settings.difficulty}` : 'Local multiplayer'

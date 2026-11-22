@@ -7,7 +7,7 @@
   <title>Pocket Chess</title>
 </head>
 <body>
-  <header class="site-header"><div class="brand"><span aria-hidden="true">♞</span> Pocket Chess</div><span class="mode" id="mode"></span></header>
+  <header class="site-header"><div class="brand"><span id="brand-piece" aria-hidden="true"></span> Pocket Chess</div><span class="mode" id="mode"></span></header>
   <main>
     <section class="play" aria-label="Chessboard">
       <div class="player" id="top-player"></div>
@@ -29,6 +29,9 @@
   </main>
   <dialog id="options" aria-labelledby="options-title">
     <h2 id="options-title">Game options</h2>
+    <fieldset id="piece-sets">
+      <legend>Piece set</legend>
+    </fieldset>
     <form id="game-settings">
       <label>Opponent
         <select name="opponent">
