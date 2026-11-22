@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f4ee">
+  <title>Pocket Chess</title>
+  <script type="module" crossorigin src="./assets/index-Ccz-NCir.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DyuQn0x6.css">
+</head>
+<body>
+  <header class="site-header"><div class="brand"><span aria-hidden="true">♞</span> Pocket Chess</div><span class="mode">Local multiplayer</span></header>
+  <main>
+    <section class="play" aria-label="Chessboard">
+      <div class="player" id="top-player"></div>
+      <div class="board" id="board" aria-label="Chess squares"></div>
+      <div class="player" id="bottom-player"></div>
+    </section>
+    <aside class="sidebar" aria-label="Game controls">
+      <div class="status" role="status" id="status"></div>
+      <section class="history" aria-labelledby="history-title">
+        <h2 id="history-title">Move history</h2>
+        <div id="moves"></div>
+      </section>
+      <div class="actions">
+        <button type="button" id="undo">Undo move</button>
+        <button type="button" id="flip">Flip board</button>
+        <button type="button" id="new-game">New game</button>
+      </div>
+    </aside>
+  </main>
+  <dialog id="promotion" aria-labelledby="promotion-title">
+    <h2 id="promotion-title">Promote pawn</h2>
+    <div id="promotion-options"></div>
+    <form method="dialog"><button>Cancel</button></form>
+  </dialog>
+</body>
+</html>
