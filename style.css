@@ -40,7 +40,6 @@ main {
 .player-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #dfe4e4; }
 #brand-piece .piece { width: 33px; height: 33px; }
 .player-icon .piece { width: 29px; height: 29px; }
-.turn-dot { width: 8px; height: 8px; background: #33715a; border-radius: 50%; }
 .board {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -56,7 +55,8 @@ main {
 .square.dark { background: var(--dark); }
 .square.last { background: #b3b888; }
 .square.selected { background: #e2c779; }
-.square.check { background: #d49783; }
+.square.check { background: #f3b962; }
+.square.mate { background: #e1858b; }
 .square:focus-visible { z-index: 1; outline-offset: -4px; }
 .square.target::after { content: ''; position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; background: #25384e65; }
 .square.capture::after { width: 90%; background: transparent; border: 4px solid #25384e80; }
@@ -72,7 +72,7 @@ main {
 .rank, .file { position: absolute; font-size: clamp(.55rem, 2cqw, .8rem); font-weight: 750; color: #23384b; pointer-events: none; }
 .rank { top: 3px; left: 4px; }
 .file { bottom: 2px; right: 4px; }
-.sidebar { display: flex; flex-direction: column; align-self: start; gap: 18px; margin-top: 46px; }
+.sidebar { display: flex; flex-direction: column; align-self: start; gap: 18px; margin-top: 62px; }
 .status, .history { border: 1px solid var(--line); border-radius: 12px; padding: 18px; background: var(--paper); }
 .status { background: var(--ink); color: var(--paper); font-weight: 700; font-size: 1.1rem; border-color: var(--ink); }
 h2 { font-size: 1rem; margin: 0 0 12px; }
@@ -84,7 +84,6 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .actions button, dialog button { background: var(--paper); border: 1px solid var(--line); padding: 10px; border-radius: 8px; font-weight: 650; }
 .actions button:hover:enabled, dialog button:hover { background: #e1e7e9; }
-.actions #options-button { grid-column: 1 / -1; }
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: inherit; padding: 20px; }
 dialog::backdrop { background: #17233388; }
 #promotion-options { display: flex; gap: 6px; margin-bottom: 12px; }
@@ -97,7 +96,6 @@ dialog::backdrop { background: #17233388; }
 }
 
 .player strong, .status { overflow-wrap: anywhere; min-width: 0; }
-.turn-dot { flex: 0 0 8px; }
 #options { width: min(420px, calc(100% - 32px)); }
 #game-settings { display: grid; gap: 14px; }
 #game-settings label { font-size: .9rem; font-weight: 650; }
@@ -143,3 +141,54 @@ dialog::backdrop { background: #17233388; }
 #piece-sets input:focus-visible + .piece-card { outline: 3px solid #bd5d22; outline-offset: 2px; }
 .piece-preview { display: grid; grid-template-columns: 1fr 1fr; height: 44px; }
 .piece-preview .piece { width: 100%; height: 44px; min-width: 0; }
+
+.board-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.clocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; flex: 1; min-width: 0; }
+.clocks .player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 8px;
+}
+.clock {
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: .9rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.clock.running { background: #285f4a; color: white; }
+#flip {
+  align-self: stretch;
+  min-width: 42px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  font-weight: 700;
+}
+#flip:hover { background: #e1e7e9; }
+#swap { justify-self: start; }
+#turn-alert { width: min(390px, calc(100% - 32px)); text-align: center; border: 2px solid currentColor; }
+#turn-alert h2 { font-size: clamp(2rem, 9vw, 3rem); margin: 0; }
+#turn-alert p { margin: 8px 0 20px; }
+#turn-alert button { min-width: 120px; }
+.status[data-state="check"], #turn-alert[data-state="check"] {
+  background: #fff0ce;
+  color: #683809;
+  border-color: #b56716;
+}
+.status[data-state="mate"], #turn-alert[data-state="mate"] {
+  background: #fce3e4;
+  color: #751e2c;
+  border-color: #af4350;
+}
+@media (max-width: 460px) {
+  .clocks .player { grid-template-columns: minmax(0, 1fr) auto; gap: 3px; font-size: .78rem; }
+  .clocks .player-icon { display: none; }
+  .clock { font-size: .82rem; padding-inline: 4px; }
+  #flip span { display: none; }
+}

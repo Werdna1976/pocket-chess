@@ -10,9 +10,14 @@
   <header class="site-header"><div class="brand"><span id="brand-piece" aria-hidden="true"></span> Pocket Chess</div><span class="mode" id="mode"></span></header>
   <main>
     <section class="play" aria-label="Chessboard">
-      <div class="player" id="top-player"></div>
+      <div class="board-header">
+        <div class="clocks" aria-label="Player clocks">
+          <div class="player" id="white-player"></div>
+          <div class="player" id="black-player"></div>
+        </div>
+        <button type="button" id="flip" aria-label="Flip board" title="Flip board">↻ <span>Flip</span></button>
+      </div>
       <div class="board" id="board" aria-label="Chess squares"></div>
-      <div class="player" id="bottom-player"></div>
     </section>
     <aside class="sidebar" aria-label="Game controls">
       <div class="status" role="status" id="status"></div>
@@ -22,7 +27,6 @@
       </section>
       <div class="actions">
         <button type="button" id="undo">Undo move</button>
-        <button type="button" id="flip">Flip board</button>
         <button type="button" id="options-button">Game options</button>
       </div>
     </aside>
@@ -39,8 +43,9 @@
           <option value="computer">Computer</option>
         </select>
       </label>
-      <label>White player name <input name="white" maxlength="40" placeholder="White"></label>
+      <label><span id="white-label">White player name</span> <input name="white" maxlength="40" placeholder="White"></label>
       <label><span id="black-label">Black player name</span> <input name="black" maxlength="40" placeholder="Black"></label>
+      <button type="button" id="swap">Swap White and Black</button>
       <label id="difficulty-field" hidden>Difficulty
         <select name="difficulty">
           <option value="easy">Easy</option>
@@ -48,12 +53,17 @@
           <option value="hard">Hard</option>
         </select>
       </label>
-      <p class="options-note">Starting a new game clears the current board and move history.</p>
+      <p class="options-note">Starting a new game resets the board, clocks, and move history.</p>
       <div class="options-actions">
         <button type="button" id="cancel-options">Cancel</button>
         <button type="submit">Start new game</button>
       </div>
     </form>
+  </dialog>
+  <dialog id="turn-alert" aria-labelledby="turn-alert-title" aria-describedby="turn-alert-detail">
+    <h2 id="turn-alert-title"></h2>
+    <p id="turn-alert-detail"></p>
+    <form method="dialog"><button>Continue</button></form>
   </dialog>
   <dialog id="promotion" aria-labelledby="promotion-title">
     <h2 id="promotion-title">Promote pawn</h2>

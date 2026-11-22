@@ -10,16 +10,20 @@ const status = document.querySelector('#status')
 const historyPanel = document.querySelector('#moves')
 const promotion = document.querySelector('#promotion')
 const promotionOptions = document.querySelector('#promotion-options')
+const turnAlert = document.querySelector('#turn-alert')
 const optionsDialog = document.querySelector('#options')
 const settingsForm = document.querySelector('#game-settings')
 const fields = settingsForm.elements
-const defaults = { opponent: 'person', white: '', black: '', difficulty: 'medium' }
+const defaults = { opponent: 'person', white: '', black: '', difficulty: 'medium', computerColor: 'b' }
 const storageKey = 'pocket-chess-v1'
 let pieceSet = 'classic'
 let selected = null
 let flipped = false
 let settings = { ...defaults }
 let engine = null
+let clock = { w: 0, b: 0 }
+let clockStarted = null
+let acknowledgedCheck = ''
 
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey))
@@ -27,9 +31,14 @@ try {
     game.loadPgn(saved.pgn)
     flipped = saved.flipped === true
     if (Object.hasOwn(pieceSets, saved.pieceSet)) pieceSet = saved.pieceSet
+    for (const color of ['w', 'b']) {
+      if (Number.isFinite(saved.clock?.[color]) && saved.clock[color] >= 0) clock[color] = saved.clock[color]
+    }
+    acknowledgedCheck = typeof saved.acknowledgedCheck === 'string' ? saved.acknowledgedCheck : ''
     const options = saved.settings
     if (options) {
       settings = {
+        computerColor: options.computerColor === 'w' ? 'w' : 'b',
         opponent: options.opponent === 'computer' ? 'computer' : 'person',
         white: typeof options.white === 'string' ? options.white.trim().slice(0, 40) : '',
         black: typeof options.black === 'string' ? options.black.trim().slice(0, 40) : '',
@@ -43,7 +52,10 @@ try {
 
 function save() {
   try {
-    localStorage.setItem(storageKey, JSON.stringify({ pgn: game.pgn(), flipped, settings, pieceSet }))
+    const elapsed = { ...clock, [game.turn()]: elapsedTime(game.turn()) }
+    localStorage.setItem(storageKey, JSON.stringify({
+      pgn: game.pgn(), flipped, settings, pieceSet, clock: elapsed, acknowledgedCheck,
+    }))
   } catch {
     // The game remains playable when storage is unavailable.
   }
@@ -71,18 +83,69 @@ for (const [id, name] of Object.entries(pieceSets)) {
   piecePicker.append(choice)
 }
 
+function otherSide(color) {
+  return color === 'w' ? 'b' : 'w'
+}
+
+function isComputer(color) {
+  return settings.opponent === 'computer' && settings.computerColor === color
+}
+
 function playerName(color) {
-  return color === 'w' ? settings.white || colors.w
-    : settings.black || (settings.opponent === 'computer' ? 'Computer' : colors.b)
+  const name = color === 'w' ? settings.white : settings.black
+  return name || (isComputer(color) ? 'Computer' : colors[color])
 }
 
 function computerTurn() {
-  return settings.opponent === 'computer' && game.turn() === 'b' && !game.isGameOver()
+  return isComputer(game.turn()) && !game.isGameOver()
+}
+
+function orientForTurn() {
+  const perspective = settings.opponent === 'computer' ? otherSide(settings.computerColor) : game.turn()
+  flipped = perspective === 'b'
+}
+
+function elapsedTime(color) {
+  return clock[color] + (clockStarted !== null && color === game.turn() ? performance.now() - clockStarted : 0)
+}
+
+function updateClocks() {
+  for (const [side, color] of [['white', 'w'], ['black', 'b']]) {
+    const timer = document.querySelector(`#${side}-player .clock`)
+    const seconds = Math.floor(elapsedTime(color) / 1000)
+    timer.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+    timer.setAttribute('aria-label', `${colors[color]} elapsed time: ${timer.textContent}`)
+    timer.classList.toggle('running', clockStarted !== null && color === game.turn())
+  }
+}
+
+function pauseClock() {
+  clock[game.turn()] = elapsedTime(game.turn())
+  clockStarted = null
+  updateClocks()
+}
+
+function resumeTurn() {
+  if (optionsDialog.open || turnAlert.open || game.isGameOver()) return
+  if (clockStarted === null && !document.hidden) clockStarted = performance.now()
+  updateClocks()
+  startComputerTurn()
+}
+
+function announceCheck() {
+  if (!game.isCheck() || acknowledgedCheck === game.fen()) return
+  const mate = game.isCheckmate()
+  turnAlert.dataset.state = mate ? 'mate' : 'check'
+  document.querySelector('#turn-alert-title').textContent = mate ? 'Checkmate!' : 'Check!'
+  document.querySelector('#turn-alert-detail').textContent = mate
+    ? `${playerName(otherSide(game.turn()))} wins.`
+    : `${playerName(game.turn())}’s king is under attack.`
+  turnAlert.showModal()
 }
 
 function gameStatus() {
   const turn = game.turn()
-  if (game.isCheckmate()) return `${playerName(turn === 'w' ? 'b' : 'w')} wins · Checkmate`
+  if (game.isCheckmate()) return `${playerName(otherSide(turn))} wins · Checkmate`
   if (game.isStalemate()) return 'Draw · Stalemate'
   if (game.isInsufficientMaterial()) return 'Draw · Insufficient material'
   if (game.isThreefoldRepetition()) return 'Draw · Threefold repetition'
@@ -94,9 +157,11 @@ function gameStatus() {
 function render(focusSquare) {
   const history = game.history({ verbose: true })
   const last = history.at(-1)
+  const warning = game.isCheckmate() ? 'mate' : game.isCheck() ? 'check' : ''
   const targets = new Set(selected ? game.moves({ square: selected, verbose: true }).map(move => move.to) : [])
   const files = [...(flipped ? 'hgfedcba' : 'abcdefgh')]
   const ranks = [...(flipped ? '12345678' : '87654321')]
+  document.querySelector('#flip').setAttribute('aria-pressed', String(flipped))
   board.innerHTML = ''
 
   ranks.forEach((rank, row) => files.forEach((file, column) => {
@@ -110,7 +175,7 @@ function render(focusSquare) {
     button.classList.toggle('selected', square === selected)
     button.classList.toggle('target', targets.has(square))
     button.classList.toggle('capture', targets.has(square) && Boolean(piece))
-    button.classList.toggle('check', Boolean(piece?.type === 'k' && piece.color === game.turn() && game.isCheck()))
+    if (warning && piece?.type === 'k' && piece.color === game.turn()) button.classList.add(warning)
     button.setAttribute('aria-pressed', String(square === selected))
     const description = piece ? `${colors[piece.color]} ${pieceNames[piece.type]}` : 'empty'
     button.setAttribute('aria-label', `${square}, ${description}${targets.has(square) ? ', legal destination' : ''}`)
@@ -123,15 +188,17 @@ function render(focusSquare) {
 
   document.querySelector('#brand-piece').innerHTML = pieceMarkup('n', 'w')
   status.textContent = gameStatus()
+  status.dataset.state = warning
   document.querySelector('#mode').textContent = settings.opponent === 'computer'
     ? `Computer · ${settings.difficulty}` : 'Local multiplayer'
-  for (const [position, color] of [['top', flipped ? 'w' : 'b'], ['bottom', flipped ? 'b' : 'w']]) {
-    const active = !game.isGameOver() && color === game.turn()
-    const player = document.querySelector(`#${position}-player`)
-    player.innerHTML = `<div class="player-icon">${pieceMarkup('k', color)}</div><strong></strong>${active ? '<span class="turn-dot" aria-label="Current turn"></span>' : ''}`
+  for (const [side, color] of [['white', 'w'], ['black', 'b']]) {
+    const player = document.querySelector(`#${side}-player`)
+    player.innerHTML = `<div class="player-icon">${pieceMarkup('k', color)}</div><strong></strong><span class="clock" role="timer"></span>`
     player.querySelector('strong').textContent = playerName(color)
   }
+  updateClocks()
   document.querySelector('#undo').disabled = history.length === 0
+    || (history.length === 1 && isComputer(history[0].color))
 
   if (history.length) {
     const rows = []
@@ -152,7 +219,7 @@ function stopEngine() {
 }
 
 function startComputerTurn() {
-  if (!computerTurn() || engine || optionsDialog.open) return
+  if (!computerTurn() || engine) return
   const worker = new Worker(new URL('./engine.js', import.meta.url), { type: 'module' })
   engine = worker
   worker.onmessage = ({ data: move }) => {
@@ -163,17 +230,22 @@ function startComputerTurn() {
   worker.onerror = () => {
     if (engine !== worker) return
     stopEngine()
+    pauseClock()
     status.textContent = 'Computer unavailable. Undo or start a new game.'
   }
   worker.postMessage({ pgn: game.pgn(), difficulty: settings.difficulty })
 }
 
 function play(move, focus = true) {
+  pauseClock()
   game.move(move)
+  acknowledgedCheck = ''
+  orientForTurn()
   selected = null
   save()
   render(focus ? move.to : board.contains(document.activeElement) ? document.activeElement.dataset.square : undefined)
-  startComputerTurn()
+  announceCheck()
+  resumeTurn()
 }
 
 board.addEventListener('click', event => {
@@ -220,11 +292,16 @@ board.addEventListener('keydown', event => {
 
 document.querySelector('#undo').addEventListener('click', () => {
   stopEngine()
+  pauseClock()
   game.undo()
-  if (settings.opponent === 'computer' && game.turn() === 'b') game.undo()
+  if (isComputer(game.turn())) game.undo()
+  acknowledgedCheck = ''
+  orientForTurn()
   selected = null
   save()
   render()
+  announceCheck()
+  resumeTurn()
 })
 
 document.querySelector('#flip').addEventListener('click', () => {
@@ -233,23 +310,39 @@ document.querySelector('#flip').addEventListener('click', () => {
   render()
 })
 
+let draftComputerColor = settings.computerColor
+
 function updateOptionsFields() {
   const computer = fields.opponent.value === 'computer'
   document.querySelector('#difficulty-field').hidden = !computer
-  document.querySelector('#black-label').textContent = computer ? 'Computer name' : 'Black player name'
-  fields.black.placeholder = computer ? 'Computer' : 'Black'
+  for (const [side, color] of [['white', 'w'], ['black', 'b']]) {
+    const computerSide = computer && draftComputerColor === color
+    document.querySelector(`#${side}-label`).textContent = computerSide ? 'Computer name' : `${colors[color]} player name`
+    fields[side].placeholder = computerSide ? 'Computer' : colors[color]
+  }
 }
 
 document.querySelector('#options-button').addEventListener('click', () => {
-  for (const [name, value] of Object.entries(settings)) fields[name].value = value
+  for (const name of ['opponent', 'white', 'black', 'difficulty']) fields[name].value = settings[name]
+  draftComputerColor = settings.computerColor
   updateOptionsFields()
   stopEngine()
+  pauseClock()
+  save()
   optionsDialog.showModal()
+})
+
+document.querySelector('#swap').addEventListener('click', () => {
+  const white = fields.white.value
+  fields.white.value = fields.black.value
+  fields.black.value = white
+  if (fields.opponent.value === 'computer') draftComputerColor = otherSide(draftComputerColor)
+  updateOptionsFields()
 })
 
 fields.opponent.addEventListener('change', updateOptionsFields)
 document.querySelector('#cancel-options').addEventListener('click', () => optionsDialog.close())
-optionsDialog.addEventListener('close', startComputerTurn)
+optionsDialog.addEventListener('close', resumeTurn)
 settingsForm.addEventListener('submit', event => {
   event.preventDefault()
   settings = {
@@ -257,13 +350,35 @@ settingsForm.addEventListener('submit', event => {
     white: fields.white.value.trim(),
     black: fields.black.value.trim(),
     difficulty: fields.difficulty.value,
+    computerColor: draftComputerColor,
   }
   game.reset()
+  clock = { w: 0, b: 0 }
+  acknowledgedCheck = ''
+  orientForTurn()
   selected = null
   save()
   render()
   optionsDialog.close()
 })
 
+turnAlert.addEventListener('cancel', event => event.preventDefault())
+turnAlert.querySelector('form').addEventListener('submit', () => {
+  acknowledgedCheck = game.fen()
+  save()
+})
+turnAlert.addEventListener('close', resumeTurn)
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    pauseClock()
+    save()
+  } else {
+    resumeTurn()
+  }
+})
+
 render()
-startComputerTurn()
+announceCheck()
+resumeTurn()
+setInterval(updateClocks, 250)
