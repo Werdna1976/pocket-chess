@@ -14,6 +14,17 @@ const turnAlert = document.querySelector('#turn-alert')
 const optionsDialog = document.querySelector('#options')
 const settingsForm = document.querySelector('#game-settings')
 const fields = settingsForm.elements
+const levels = {
+  beginner: { label: 'Beginner', skill: 0, time: 180 },
+  easy: { label: 'Easy', skill: 3, time: 250 },
+  casual: { label: 'Casual', skill: 6, time: 380 },
+  medium: { label: 'Medium', skill: 10, time: 550 },
+  hard: { label: 'Hard', skill: 14, time: 850 },
+  expert: { label: 'Expert', skill: 17, time: 1250 },
+  master: { label: 'Maximum', skill: 20, time: 1800 },
+}
+for (const [id, { label }] of Object.entries(levels)) fields.difficulty.add(new Option(label, id))
+
 const defaults = { opponent: 'person', white: '', black: '', difficulty: 'medium', computerColor: 'b' }
 const storageKey = 'pocket-chess-v1'
 let pieceSet = 'classic'
@@ -21,6 +32,8 @@ let selected = null
 let flipped = false
 let settings = { ...defaults }
 let engine = null
+let engineTimeout = null
+let moving = false
 let clock = { w: 0, b: 0 }
 let clockStarted = null
 let acknowledgedCheck = ''
@@ -42,7 +55,7 @@ try {
         opponent: options.opponent === 'computer' ? 'computer' : 'person',
         white: typeof options.white === 'string' ? options.white.trim().slice(0, 40) : '',
         black: typeof options.black === 'string' ? options.black.trim().slice(0, 40) : '',
-        difficulty: ['easy', 'medium', 'hard'].includes(options.difficulty) ? options.difficulty : defaults.difficulty,
+        difficulty: Object.hasOwn(levels, options.difficulty) ? options.difficulty : defaults.difficulty,
       }
     }
   }
@@ -62,7 +75,8 @@ function save() {
 }
 
 function pieceMarkup(type, color, set = pieceSet) {
-  return `<img class="piece" src="${import.meta.env.BASE_URL}pieces/${set}/${color}${type}.png" alt="" draggable="false">`
+  const art = type === 'b' ? 'b-mitre' : type
+  return `<img class="piece" src="${import.meta.env.BASE_URL}pieces/${set}/${color}${art}.png" alt="" draggable="false">`
 }
 
 const piecePicker = document.querySelector('#piece-sets')
@@ -126,7 +140,7 @@ function pauseClock() {
 }
 
 function resumeTurn() {
-  if (optionsDialog.open || turnAlert.open || game.isGameOver()) return
+  if (moving || optionsDialog.open || turnAlert.open || game.isGameOver()) return
   if (clockStarted === null && !document.hidden) clockStarted = performance.now()
   updateClocks()
   startComputerTurn()
@@ -190,7 +204,7 @@ function render(focusSquare) {
   status.textContent = gameStatus()
   status.dataset.state = warning
   document.querySelector('#mode').textContent = settings.opponent === 'computer'
-    ? `Computer · ${settings.difficulty}` : 'Local multiplayer'
+    ? `Computer · ${levels[settings.difficulty].label}` : 'Local multiplayer'
   for (const [side, color] of [['white', 'w'], ['black', 'b']]) {
     const player = document.querySelector(`#${side}-player`)
     player.innerHTML = `<div class="player-icon">${pieceMarkup('k', color)}</div><strong></strong><span class="clock" role="timer"></span>`
@@ -214,43 +228,110 @@ function render(focusSquare) {
 }
 
 function stopEngine() {
+  clearTimeout(engineTimeout)
   engine?.terminate()
   engine = null
 }
 
 function startComputerTurn() {
   if (!computerTurn() || engine) return
-  const worker = new Worker(new URL('./engine.js', import.meta.url), { type: 'module' })
-  engine = worker
-  worker.onmessage = ({ data: move }) => {
-    if (engine !== worker) return
-    stopEngine()
-    if (move && computerTurn()) play(move, false)
-  }
-  worker.onerror = () => {
-    if (engine !== worker) return
+  function engineFailed() {
     stopEngine()
     pauseClock()
-    status.textContent = 'Computer unavailable. Undo or start a new game.'
+    status.textContent = 'Computer unavailable. Undo or reopen Game options to retry.'
   }
-  worker.postMessage({ pgn: game.pgn(), difficulty: settings.difficulty })
+
+  let worker
+  try {
+    const url = new URL(`${import.meta.env.BASE_URL}stockfish/stockfish-18-lite-single.js`, document.baseURI)
+    worker = new Worker(url)
+  } catch {
+    engineFailed()
+    return
+  }
+  engine = worker
+  const { skill, time } = levels[settings.difficulty]
+  const history = game.history({ verbose: true })
+  const moves = history.map(move => move.lan)
+  const position = `position fen ${history[0]?.before ?? game.fen()}${moves.length ? ' moves ' + moves.join(' ') : ''}`
+
+  worker.onmessage = ({ data: line }) => {
+    if (engine !== worker || typeof line !== 'string') return
+    if (line === 'uciok') {
+      worker.postMessage(`setoption name Skill Level value ${skill}`)
+      worker.postMessage('isready')
+    } else if (line === 'readyok') {
+      worker.postMessage(position)
+      worker.postMessage(`go movetime ${time}`)
+    } else if (line.startsWith('bestmove ')) {
+      const uci = line.split(/\s+/)[1]
+      const move = game.moves({ verbose: true }).find(candidate => candidate.lan === uci)
+      if (!move) {
+        engineFailed()
+        return
+      }
+      stopEngine()
+      if (computerTurn()) play(move, false)
+    }
+  }
+  worker.onerror = engineFailed
+  engineTimeout = setTimeout(engineFailed, 20000)
+  worker.postMessage('uci')
 }
 
-function play(move, focus = true) {
+function slidePiece(from, to) {
+  const source = board.querySelector(`[data-square="${from}"] .piece`)
+  const destination = board.querySelector(`[data-square="${to}"]`)
+  if (!source || !destination) return Promise.resolve()
+  const frame = board.getBoundingClientRect()
+  const origin = source.getBoundingClientRect()
+  const target = destination.getBoundingClientRect()
+  const piece = source.cloneNode()
+  piece.classList.add('moving-piece')
+  Object.assign(piece.style, {
+    left: `${origin.left - frame.left}px`,
+    top: `${origin.top - frame.top}px`,
+    width: `${origin.width}px`,
+    height: `${origin.height}px`,
+  })
+  source.style.visibility = 'hidden'
+  board.append(piece)
+  const x = target.left + (target.width - origin.width) / 2 - origin.left
+  const y = target.top + (target.height - origin.height) / 2 - origin.top
+  const animation = piece.animate([
+    { transform: 'translate(0, 0)' },
+    { transform: `translate(${x}px, ${y}px)` },
+  ], { duration: 460, easing: 'cubic-bezier(.25,.7,.25,1)', fill: 'forwards' })
+  return animation.finished.catch(() => {})
+}
+
+async function play(move, focus = true) {
   pauseClock()
-  game.move(move)
+  const retainFocus = focus ? move.to : board.contains(document.activeElement) ? document.activeElement.dataset.square : undefined
+  const played = game.move(move)
   acknowledgedCheck = ''
   orientForTurn()
   selected = null
   save()
-  render(focus ? move.to : board.contains(document.activeElement) ? document.activeElement.dataset.square : undefined)
+  if (!document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    moving = true
+    const slides = [slidePiece(played.from, played.to)]
+    if (played.isKingsideCastle() || played.isQueensideCastle()) {
+      const rank = played.to[1]
+      const kingside = played.isKingsideCastle()
+      slides.push(slidePiece((kingside ? 'h' : 'a') + rank, (kingside ? 'f' : 'd') + rank))
+    }
+    await Promise.all(slides)
+    moving = false
+  }
+  render(retainFocus)
   announceCheck()
   resumeTurn()
 }
 
 board.addEventListener('click', event => {
   const square = event.target.closest('[data-square]')?.dataset.square
-  if (!square || game.isGameOver() || computerTurn()) return
+  if (moving || !square || game.isGameOver() || computerTurn()) return
   const options = selected ? game.moves({ square: selected, verbose: true }).filter(move => move.to === square) : []
   if (options[0]?.promotion) {
     promotionOptions.replaceChildren()
@@ -277,6 +358,7 @@ board.addEventListener('click', event => {
 })
 
 board.addEventListener('keydown', event => {
+  if (moving) return
   const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -8, ArrowDown: 8 }
   if (!Object.hasOwn(offsets, event.key)) return
   const buttons = [...board.children]
@@ -291,6 +373,7 @@ board.addEventListener('keydown', event => {
 })
 
 document.querySelector('#undo').addEventListener('click', () => {
+  if (moving) return
   stopEngine()
   pauseClock()
   game.undo()
@@ -305,6 +388,7 @@ document.querySelector('#undo').addEventListener('click', () => {
 })
 
 document.querySelector('#flip').addEventListener('click', () => {
+  if (moving) return
   flipped = !flipped
   save()
   render()
@@ -323,6 +407,7 @@ function updateOptionsFields() {
 }
 
 document.querySelector('#options-button').addEventListener('click', () => {
+  if (moving) return
   for (const name of ['opponent', 'white', 'black', 'difficulty']) fields[name].value = settings[name]
   draftComputerColor = settings.computerColor
   updateOptionsFields()

@@ -46,13 +46,10 @@
       <label><span id="white-label">White player name</span> <input name="white" maxlength="40" placeholder="White"></label>
       <label><span id="black-label">Black player name</span> <input name="black" maxlength="40" placeholder="Black"></label>
       <button type="button" id="swap">Swap White and Black</button>
-      <label id="difficulty-field" hidden>Difficulty
-        <select name="difficulty">
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
-      </label>
+      <div id="difficulty-field" hidden>
+        <label>Difficulty <select name="difficulty"></select></label>
+        <small class="engine-credit">Stockfish 18 Lite · <a href="./stockfish/README.txt" target="_blank" rel="noopener">Source and license</a></small>
+      </div>
       <p class="options-note">Starting a new game resets the board, clocks, and move history.</p>
       <div class="options-actions">
         <button type="button" id="cancel-options">Cancel</button>

@@ -192,3 +192,8 @@ dialog::backdrop { background: #17233388; }
   .clock { font-size: .82rem; padding-inline: 4px; }
   #flip span { display: none; }
 }
+
+.board { position: relative; }
+.board > .moving-piece { position: absolute; z-index: 2; }
+.engine-credit { display: block; margin-top: 6px; color: var(--muted); }
+.engine-credit a { color: inherit; }
