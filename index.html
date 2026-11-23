@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f6f4ee">
   <title>Pocket Chess</title>
-  <script type="module" crossorigin src="./assets/index-Dx8uWIzd.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CJek0QNL.css">
+  <script type="module" crossorigin src="./assets/index-CtM2Wom2.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-eGM-s61a.css">
 </head>
 <body>
   <header class="site-header"><div class="brand"><span id="brand-piece" aria-hidden="true"></span> Pocket Chess</div><span class="mode" id="mode"></span></header>
@@ -48,13 +48,10 @@
       <label><span id="white-label">White player name</span> <input name="white" maxlength="40" placeholder="White"></label>
       <label><span id="black-label">Black player name</span> <input name="black" maxlength="40" placeholder="Black"></label>
       <button type="button" id="swap">Swap White and Black</button>
-      <label id="difficulty-field" hidden>Difficulty
-        <select name="difficulty">
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
-      </label>
+      <div id="difficulty-field" hidden>
+        <label>Difficulty <select name="difficulty"></select></label>
+        <small class="engine-credit">Stockfish 18 Lite · <a href="./stockfish/README.txt" target="_blank" rel="noopener">Source and license</a></small>
+      </div>
       <p class="options-note">Starting a new game resets the board, clocks, and move history.</p>
       <div class="options-actions">
         <button type="button" id="cancel-options">Cancel</button>
